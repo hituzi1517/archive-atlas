@@ -1,0 +1,37 @@
+{
+  "name": "Archive Atlas — YouTube Activity Explorer",
+  "short_name": "Archive Atlas",
+  "description": "YouTube Data API v3で、配信・動画の活動統計、ランダム発掘、日付検索、ランキング、ヒートマップを分析するWebアプリ。",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#090b10",
+  "theme_color": "#090b10",
+  "lang": "ja",
+  "orientation": "any",
+  "categories": [
+    "entertainment",
+    "utilities"
+  ],
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
