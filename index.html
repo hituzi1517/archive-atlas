@@ -14,7 +14,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png" />
   <link rel="icon" type="image/svg+xml" href="./icons/favicon.svg" />
   <meta name="description" content="YouTube Data API v3 を使って、配信と通常動画の活動統計・ランダム発掘・日付検索・ランキング・ヒートマップを表示する静的Webアプリ。" />
-  <title>Archive Atlas Activity — YouTube Channel Explorer</title>
+  <title>Archive Atlas — YouTube Channel Explorer</title>
   <style>
 :root {
   --bg: #090b10;
@@ -299,6 +299,11 @@ textarea:focus { border-color: rgba(124,92,255,.6); box-shadow: 0 0 0 4px rgba(1
 .activity-summary > div { border:1px solid var(--line); border-radius:14px; padding:13px; background:rgba(255,255,255,.025); display:grid; gap:3px; }
 .activity-summary strong { font-size:20px; }
 .activity-summary span { color:var(--muted); font-size:10px; }
+.ranking-period-controls { margin-top:16px; display:flex; align-items:end; gap:12px; flex-wrap:wrap; }
+.ranking-custom-dates { display:grid; grid-template-columns:repeat(2,minmax(160px,1fr)); gap:12px; flex:1 1 360px; }
+.ranking-summary { margin:14px 0 8px; font-size:12px; color:#d5d9e9; background:rgba(124,92,255,.10); border:1px solid rgba(124,92,255,.20); border-radius:12px; padding:10px 13px; }
+.ranking-period-controls [hidden], .ranking-custom-dates[hidden] { display:none!important; }
+@media (max-width:560px){.ranking-period-controls { align-items:stretch; flex-direction:column; }.ranking-custom-dates { display:grid; grid-template-columns:1fr; flex:auto; width:100%; }}
 @media (max-width:850px){ .filter-controls{grid-template-columns:1fr}.random-controls{grid-template-columns:1fr 1fr}.random-pick{grid-template-columns:1fr}.random-pick-thumb{min-height:220px}.activity-summary{grid-template-columns:1fr 1fr}.filter-panel-head{flex-direction:column}.excluded-item{grid-template-columns:1fr auto}.excluded-reason{grid-column:1/-1}.insight-grid{grid-template-columns:1fr;} }
 @media (max-width:850px){ .analytics-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.compare-controls{grid-template-columns:1fr}.subsection-heading{align-items:flex-start;flex-direction:column}.subsection-heading p{text-align:left}.heatmap-block{padding:14px} }
 @media (max-width:560px){ .analytics-grid{grid-template-columns:1fr}.random-controls,.random-custom-dates,.activity-summary{grid-template-columns:1fr}.month-col{width:42px}.month-bar{width:26px} }
@@ -696,6 +701,7 @@ button, input, select, textarea { -webkit-tap-highlight-color: transparent; }
         <label class="field compact-field">
           <span>指標</span>
           <select id="rankingMetric">
+            <option value="views" selected>再生数（現在の累計）</option>
             <option value="likes">高評価数</option>
             <option value="comments">コメント数</option>
             <option value="velocity">再生数 ÷ 経過日数</option>
@@ -722,10 +728,34 @@ button, input, select, textarea { -webkit-tap-highlight-color: transparent; }
           </select>
         </label>
       </div>
-      <p id="rankingNote" class="ratio-note">「再生数 ÷ 配信時間」は、配信1時間あたりの現在の累計再生数です。値が大きいほど、短い配信時間に対して多く再生されています。</p>
+      <div class="ranking-period-controls">
+        <label class="field compact-field">
+          <span>ランキング対象期間</span>
+          <select id="rankingPeriod">
+            <option value="all" selected>全期間</option>
+            <option value="30">直近30日</option>
+            <option value="90">直近90日</option>
+            <option value="365">直近1年（365日）</option>
+            <option value="730">直近2年（730日）</option>
+            <option value="1825">直近5年（1825日）</option>
+            <option value="year">年別に指定</option>
+            <option value="custom">開始日・終了日を指定</option>
+          </select>
+        </label>
+        <label class="field compact-field" id="rankingYearControl" hidden>
+          <span>対象年</span>
+          <select id="rankingYear" aria-label="ランキングの対象年"></select>
+        </label>
+        <div id="rankingCustomDates" class="ranking-custom-dates" hidden>
+          <label class="field"><span>開始日</span><input id="rankingFrom" type="date"></label>
+          <label class="field"><span>終了日</span><input id="rankingTo" type="date"></label>
+        </div>
+      </div>
+      <p id="rankingSummary" class="ranking-summary" aria-live="polite">期間・種類を指定して順位を表示します。</p>
+      <p id="rankingNote" class="ratio-note">期間は投稿・配信日で絞り込みます。再生数は取得時点の累計であり、選択期間中に発生した再生回数ではありません。</p>
       <div class="table-wrap">
         <table class="ranking-table">
-          <thead><tr><th>#</th><th>動画</th><th>投稿日</th><th id="rankingValueHeader">高評価数</th></tr></thead>
+          <thead><tr><th>#</th><th>動画</th><th>投稿・配信日</th><th id="rankingValueHeader">再生数</th></tr></thead>
           <tbody id="rankingBody"></tbody>
         </table>
       </div>
@@ -876,7 +906,7 @@ const els = {
   randomType: el('randomType'), randomPeriod: el('randomPeriod'), randomFilterMode: el('randomFilterMode'), randomMinDuration: el('randomMinDuration'), randomMaxDuration: el('randomMaxDuration'), randomCustomDates: el('randomCustomDates'), randomFrom: el('randomFrom'), randomTo: el('randomTo'), randomCandidateCount: el('randomCandidateCount'), randomPickButton: el('randomPickButton'), randomResult: el('randomResult'), randomScopeBadge: el('randomScopeBadge'),
   statSubs: el('statSubs'), statViews: el('statViews'), statVideos: el('statVideos'), statArchives: el('statArchives'), statRegularVideos: el('statRegularVideos'), statViewsLabel: el('statViewsLabel'), statVideosLabel: el('statVideosLabel'), statViewsNote: el('statViewsNote'), statVideosNote: el('statVideosNote'), statArchivesNote: el('statArchivesNote'), latestVideo: el('latestVideo'), popularVideo: el('popularVideo'), latestContentTitle: el('latestContentTitle'), popularContentTitle: el('popularContentTitle'),
   freqPerWeek: el('freqPerWeek'), freq30: el('freq30'), freq90: el('freq90'), freqInterval: el('freqInterval'), frequencyNote: el('frequencyNote'), frequencyTitle: el('frequencyTitle'), freqPerWeekLabel: el('freqPerWeekLabel'),
-  rankingMetric: el('rankingMetric'), rankingScope: el('rankingScope'), rankingLimit: el('rankingLimit'), rankingValueHeader: el('rankingValueHeader'), rankingBody: el('rankingBody'), rankingNote: el('rankingNote'),
+  rankingMetric: el('rankingMetric'), rankingScope: el('rankingScope'), rankingLimit: el('rankingLimit'), rankingValueHeader: el('rankingValueHeader'), rankingBody: el('rankingBody'), rankingNote: el('rankingNote'), rankingPeriod: el('rankingPeriod'), rankingYear: el('rankingYear'), rankingYearControl: el('rankingYearControl'), rankingCustomDates: el('rankingCustomDates'), rankingFrom: el('rankingFrom'), rankingTo: el('rankingTo'), rankingSummary: el('rankingSummary'),
   startHeatmap: el('startHeatmap'), endHeatmap: el('endHeatmap'), startPeakSlot: el('startPeakSlot'), endPeakSlot: el('endPeakSlot'),
   statAvgDuration: el('statAvgDuration'), statTotalDuration: el('statTotalDuration'), statLongestDuration: el('statLongestDuration'), statAvgArchiveViews: el('statAvgArchiveViews'), statAvgDurationLabel: el('statAvgDurationLabel'), statAvgDurationNote: el('statAvgDurationNote'), statTotalDurationLabel: el('statTotalDurationLabel'), statTotalDurationNote: el('statTotalDurationNote'), statLongestDurationLabel: el('statLongestDurationLabel'), statAvgViewsLabel: el('statAvgViewsLabel'),
   longestStreak: el('longestStreak'), longestStreakRange: el('longestStreakRange'), latestStreak: el('latestStreak'), latestStreakRange: el('latestStreakRange'), currentStreak: el('currentStreak'), busiestMonth: el('busiestMonth'), busiestMonthValue: el('busiestMonthValue'), activeDaysCount: el('activeDaysCount'), archiveShare: el('archiveShare'), mostActiveWeekday: el('mostActiveWeekday'), monthlyActivityTitle: el('monthlyActivityTitle'), monthlyActivityDesc: el('monthlyActivityDesc'), monthlyCountTitle: el('monthlyCountTitle'), monthlyCountDesc: el('monthlyCountDesc'), monthlyViewsDesc: el('monthlyViewsDesc'), monthlyActivityChart: el('monthlyActivityChart'), monthlyStreamCountChart: el('monthlyStreamCountChart'), monthlyViewsChart: el('monthlyViewsChart'),
@@ -1285,6 +1315,7 @@ function renderAll() {
   els.analysisFilterPanel.hidden = false;
   renderFilterStatus();
   renderEncyclopedia();
+  updateRankingYearOptions();
   renderRanking();
   renderHeatmap();
   renderTrends();
@@ -1484,50 +1515,120 @@ function pickRandomVideo(){
   updateRandomCandidates();
 }
 
+// Rankings only select videos whose posting/stream-start date falls in the chosen period.
+// Current lifetime statistics are never misrepresented as historical period views.
+function updateRankingYearOptions() {
+  if (!els.rankingYear) return;
+  const years = [...new Set(selectActivityItems(state.videos, 'all').map(v => {
+    const time = new Date(activityDate(v));
+    return Number.isFinite(time.getTime()) ? localDateKey(time).slice(0, 4) : null;
+  }).filter(Boolean))].sort((a, b) => Number(b) - Number(a));
+  const previous = els.rankingYear.value;
+  const todayYear = localDateKey(new Date()).slice(0, 4);
+  els.rankingYear.innerHTML = years.map(y => `<option value="${y}">${y}年</option>`).join('');
+  if (years.includes(previous)) els.rankingYear.value = previous;
+  else els.rankingYear.value = years.includes(todayYear) ? todayYear : years[0] || '';
+}
+
+function syncRankingPeriodControls() {
+  const period = els.rankingPeriod?.value || 'all';
+  els.rankingYearControl.hidden = period !== 'year';
+  els.rankingCustomDates.hidden = period !== 'custom';
+}
+
+function rankingPeriodError() {
+  if (els.rankingPeriod.value === 'custom' && els.rankingFrom.value && els.rankingTo.value && els.rankingFrom.value > els.rankingTo.value) {
+    return '開始日は終了日以前にしてください。';
+  }
+  return '';
+}
+
+function rankingDateInRange(video) {
+  const date = new Date(activityDate(video));
+  if (!Number.isFinite(date.getTime())) return false;
+  const period = els.rankingPeriod.value;
+  if (period === 'all') return true;
+  if (period === 'year') return localDateKey(date).startsWith(`${els.rankingYear.value}-`);
+  if (period === 'custom') {
+    const day = localDateKey(date);
+    return (!els.rankingFrom.value || day >= els.rankingFrom.value) && (!els.rankingTo.value || day <= els.rankingTo.value);
+  }
+  const dayCount = Number(period);
+  const age = Date.now() - date.getTime();
+  return Number.isFinite(dayCount) && age >= 0 && age <= dayCount * 86400000;
+}
+
+function rankingPeriodLabel() {
+  const labels = {'all':'全期間', '30':'直近30日', '90':'直近90日', '365':'直近1年', '730':'直近2年', '1825':'直近5年'};
+  const period = els.rankingPeriod.value;
+  if (period === 'year') return `${els.rankingYear.value || '未選択'}年`;
+  if (period === 'custom') return `${els.rankingFrom.value || '最初'} 〜 ${els.rankingTo.value || '現在'}`;
+  return labels[period] || '全期間';
+}
+
 function renderRanking() {
+  syncRankingPeriodControls();
   if (!state.channel) return;
   const metric = els.rankingMetric.value;
   const scope = els.rankingScope.value;
   const limit = Number(els.rankingLimit.value);
   const labels = {
-    likes: '高評価数', comments: 'コメント数', velocity: '再生数 / 日',
+    views: '再生数（現在の累計）', likes: '高評価数', comments: 'コメント数', velocity: '再生数 / 日',
     viewsPerHour: '再生数 / 配信1時間', ageAdjustedViewsPerHour: '再生数 / 配信1時間 / 経過日',
     likeRate: '高評価 / 1000再生', commentRate: 'コメント / 1000再生'
   };
   const notes = {
-    likes: '現在APIで取得できる高評価数で並べます。',
-    comments: '現在APIで取得できるコメント数で並べます。',
-    velocity: '現在の累計再生数を公開後の経過日数で割った参考値です。最近の動画と古い動画を比較しやすくします。',
-    viewsPerHour: '配信1時間あたりの現在の累計再生数です。値が大きいほど、短い配信時間に対して多く再生されています。配信アーカイブのみが対象です。',
-    ageAdjustedViewsPerHour: '「再生数 ÷ 配信時間」をさらに公開後の経過日数で割った参考値です。古い配信ほど累計再生数を貯めやすい影響を弱めます。配信アーカイブのみが対象です。',
-    likeRate: '1000再生あたりの高評価数。再生規模ではなく反応の濃さを見る参考値です。',
+    views: '指定期間中に投稿・開始したコンテンツを、取得時点の累計再生数で並べます。選択期間内だけで増えた再生数ではありません。',
+    likes: '現在APIで取得できる高評価数で並べます。非公開の場合はランキング対象外です。',
+    comments: '現在APIで取得できるコメント数で並べます。非公開・無効の場合は対象外です。',
+    velocity: '現在の累計再生数を公開後の経過日数で割った参考値です。配信はライブ開始日で期間を判定しますが、この指標の経過日数は公開日から計算します。',
+    viewsPerHour: '配信1時間あたりの現在の累計再生数です。配信アーカイブのみ対象です。',
+    ageAdjustedViewsPerHour: '「再生数 ÷ 配信時間」をさらにライブ開始後の経過日数で割った参考値です。配信アーカイブのみ対象です。',
+    likeRate: '1000再生あたりの高評価数。再生規模に対する反応の参考値です。',
     commentRate: '1000再生あたりのコメント数。コメントが無効・制限されている動画では比較できない場合があります。'
   };
-  els.rankingValueHeader.textContent = labels[metric];
-  els.rankingNote.textContent = notes[metric];
   const archiveOnly = metric === 'viewsPerHour' || metric === 'ageAdjustedViewsPerHour';
+  if (archiveOnly) els.rankingScope.value = 'archives';
+  els.rankingScope.disabled = archiveOnly;
+  els.rankingScope.title = archiveOnly ? 'この指標は配信アーカイブのみ対象です' : '';
+  els.rankingValueHeader.textContent = labels[metric];
+  els.rankingNote.textContent = notes[metric] + ' 期間は通常動画の公開日／配信の実際の開始日（選択中のタイムゾーン）で判定します。';
+
+  const error = rankingPeriodError();
+  if (error) {
+    els.rankingSummary.textContent = error;
+    els.rankingBody.innerHTML = '<tr><td colspan="4">日付の指定を確認してください。</td></tr>';
+    return;
+  }
   const filteredVideos = analysisVideos();
   const filteredArchives = filteredVideos.filter(isArchive);
   const regularVideos = filteredVideos.filter(isRegularVideo);
-  const source = archiveOnly ? filteredArchives : (scope === 'archives' ? filteredArchives : (scope === 'videos' ? regularVideos : filteredVideos.filter(v=>isArchive(v)||isRegularVideo(v))));
+  const source = archiveOnly ? filteredArchives : (scope === 'archives' ? filteredArchives : (scope === 'videos' ? regularVideos : filteredVideos.filter(v => isArchive(v) || isRegularVideo(v))));
+  const candidates = source.filter(rankingDateInRange);
 
-  const scored = source.map(video => {
+  const scored = candidates.map(video => {
     let value = null;
+    if (metric === 'views') value = num(video.statistics?.viewCount);
     if (metric === 'likes') value = num(video.statistics?.likeCount);
     if (metric === 'comments') value = num(video.statistics?.commentCount);
-    if (metric === 'velocity') value = num(video.statistics?.viewCount) / daysSince(video.snippet.publishedAt);
+    if (metric === 'velocity') {
+      const views = num(video.statistics?.viewCount);
+      if (views != null) value = views / daysSince(video.snippet.publishedAt);
+    }
     if (metric === 'viewsPerHour') value = viewsPerStreamHour(video);
     if (metric === 'ageAdjustedViewsPerHour') value = ageAdjustedViewsPerHour(video);
     if (metric === 'likeRate') value = perThousandRate(video, 'likeCount');
     if (metric === 'commentRate') value = perThousandRate(video, 'commentCount');
     return { video, value };
-  }).filter(x => x.value != null && Number.isFinite(x.value)).sort((a,b) => b.value - a.value).slice(0, limit);
+  }).filter(x => x.value != null && Number.isFinite(x.value)).sort((a,b) => b.value - a.value || new Date(activityDate(b.video)) - new Date(activityDate(a.video)));
 
+  const scopeText = archiveOnly ? '配信アーカイブのみ（指標の仕様）' : scope === 'all' ? '全動画' : scope === 'archives' ? '配信アーカイブのみ' : '通常動画のみ';
+  els.rankingSummary.textContent = `${rankingPeriodLabel()} ｜ ${scopeText} ｜ 期間内 ${fmtNumber(candidates.length)}本・指標算出可能 ${fmtNumber(scored.length)}本 ｜ 表示 ${Math.min(limit, scored.length)}本（現在のデータ）`;
   if (!scored.length) {
-    els.rankingBody.innerHTML = '<tr><td colspan="4">この条件で利用できる統計がありません。</td></tr>';
+    els.rankingBody.innerHTML = '<tr><td colspan="4">この条件で利用できる統計がありません。対象期間・種類・外れ値フィルターを確認してください。</td></tr>';
     return;
   }
-  els.rankingBody.innerHTML = scored.map((item, i) => {
+  els.rankingBody.innerHTML = scored.slice(0, limit).map((item, i) => {
     const v = item.video;
     let valueText = fmtNumber(item.value);
     if (metric === 'velocity') valueText = `${fmtNumber(Math.round(item.value))} /日`;
@@ -1537,7 +1638,7 @@ function renderRanking() {
     return `<tr>
       <td class="rank-number">${i + 1}</td>
       <td><div class="rank-video"><img src="${escapeAttr(thumbnail(v))}" alt="" loading="lazy"><a href="${youtubeUrl(v.id)}" target="_blank" rel="noreferrer">${escapeHTML(v.snippet.title)}</a></div></td>
-      <td>${escapeHTML(formatDate(v.snippet.publishedAt))}</td>
+      <td>${escapeHTML(formatDate(activityDate(v)))}</td>
       <td class="rank-value">${valueText}</td>
     </tr>`;
   }).join('');
@@ -1828,7 +1929,9 @@ function setDefaultDate() {
   const o = {}; parts.forEach(p => o[p.type] = p.value);
   els.archiveDate.value = `${o.year}-${o.month}-${o.day}`;
   if(els.randomTo) els.randomTo.value=`${o.year}-${o.month}-${o.day}`;
+  if(els.rankingTo) els.rankingTo.value=`${o.year}-${o.month}-${o.day}`;
   if(els.randomFrom){ const d=new Date(); d.setFullYear(d.getFullYear()-1); const pp=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d); const oo={};pp.forEach(p=>oo[p.type]=p.value);els.randomFrom.value=`${oo.year}-${oo.month}-${oo.day}`; }
+  if(els.rankingFrom){ const prev = new Date(now); prev.setFullYear(prev.getFullYear()-1); els.rankingFrom.value=localDateKey(prev); }
 }
 
 function switchTab(name) {
@@ -1848,6 +1951,12 @@ els.dateMode.addEventListener('change', searchByDate);
 els.rankingMetric.addEventListener('change', renderRanking);
 els.rankingScope.addEventListener('change', renderRanking);
 els.rankingLimit.addEventListener('change', renderRanking);
+els.rankingPeriod.addEventListener('change', renderRanking);
+els.rankingYear.addEventListener('change', renderRanking);
+[els.rankingFrom, els.rankingTo].forEach(input => {
+  input.addEventListener('change', renderRanking);
+  input.addEventListener('input', renderRanking);
+});
 els.titleScope.addEventListener('change', renderTitles);
 [els.randomType,els.randomPeriod,els.randomFilterMode,els.randomMinDuration,els.randomMaxDuration,els.randomFrom,els.randomTo].forEach(x=>x?.addEventListener('change',updateRandomCandidates));
 els.randomPickButton.addEventListener('click',pickRandomVideo);
@@ -1860,6 +1969,8 @@ els.timezoneSelect.addEventListener('change', () => {
   state.timezone = els.timezoneSelect.value;
   if (!state.channel) return;
   renderEncyclopedia();
+  updateRankingYearOptions();
+  renderRanking();
   renderHeatmap();
   renderTrends();
   renderPopularity();
